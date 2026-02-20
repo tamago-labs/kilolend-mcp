@@ -14,7 +14,39 @@ export const CheckAllowanceTool: McpTool = {
     },
     handler: async (agent: WalletAgent, input: Record<string, any>) => {
         try {
-            const tokenSymbol = input.token_symbol.toUpperCase();
+            const tokenSymbol = input.token_symbol.trim();
+            
+            // Case-insensitive token resolution
+            let resolvedToken = tokenSymbol;
+
+            // Get token addresses and try case-insensitive matching
+            const tokenAddresses = agent['getTokenAddresses']();
+
+            // Try different case variations
+            let tokenAddress = tokenAddresses[resolvedToken];
+            if (!tokenAddress) {
+                const variations = [
+                    tokenSymbol,
+                    tokenSymbol.toUpperCase(),
+                    tokenSymbol.toLowerCase(),
+                    'StKAIA', // Specific for StKAIA
+                    'stKAIA',
+                    'STKAIA'
+                ];
+                
+                for (const variation of variations) {
+                    if (tokenAddresses[variation]) {
+                        tokenAddress = tokenAddresses[variation];
+                        resolvedToken = variation;
+                        break;
+                    }
+                }
+            }
+
+            if (!tokenAddress) {
+                const availableTokens = Object.keys(tokenAddresses).join(', ');
+                throw new Error(`Token ${tokenSymbol} not available on current network. Available tokens: ${availableTokens}`);
+            }
             
             // Get current network info for context
             const networkInfo = agent.currentNetworkInfo;
@@ -24,19 +56,39 @@ export const CheckAllowanceTool: McpTool = {
             if (!spenderAddress) {
                 // Get cToken addresses for current network to find the appropriate spender
                 const contracts = agent['getContractAddresses']();
-                const cTokenKey = `c${tokenSymbol}`;
-                const cTokenAddress = contracts[cTokenKey as keyof typeof contracts];
+                
+                // Try to find cToken with case variations
+                let cTokenAddress = null;
+                const cTokenVariations = [
+                    `c${resolvedToken}`,
+                    `c${resolvedToken.toUpperCase()}`,
+                    `c${resolvedToken.toLowerCase()}`,
+                    `cStKAIA`, // Specific for StKAIA
+                    `cstKAIA`,
+                    `cSTKAIA`
+                ];
+                
+                for (const variation of cTokenVariations) {
+                    if (contracts[variation as keyof typeof contracts]) {
+                        cTokenAddress = contracts[variation as keyof typeof contracts];
+                        break;
+                    }
+                }
                 
                 if (!cTokenAddress) {
-                    throw new Error(`Market ${tokenSymbol} not available on current network. Available tokens: ${Object.keys(contracts).filter(k => k.startsWith('c')).map(k => k.substring(1)).join(', ')}`);
+                    const availableTokens = Object.keys(contracts)
+                        .filter(k => k.startsWith('c'))
+                        .map(k => k.substring(1))
+                        .join(', ');
+                    throw new Error(`Market ${tokenSymbol} not available on current network. Available tokens: ${availableTokens}`);
                 }
                 spenderAddress = cTokenAddress as string;
             }
 
-            const allowance = await agent['checkAllowance'](tokenSymbol, spenderAddress as `0x${string}`);
+            const allowance = await agent['checkAllowance'](resolvedToken, spenderAddress as `0x${string}`);
 
             // Get token decimals for proper formatting
-            const tokenDecimals = agent['getTokenDecimals'] ? agent['getTokenDecimals'](tokenSymbol) : 18;
+            const tokenDecimals = agent['getTokenDecimals'] ? agent['getTokenDecimals'](resolvedToken) : 18;
             const allowanceFormatted = Number(allowance) / Math.pow(10, tokenDecimals);
 
             // Determine if allowance is sufficient for operations
@@ -48,7 +100,7 @@ export const CheckAllowanceTool: McpTool = {
                 status: "success",
                 message: `✅ Allowance checked successfully`,
                 details: {
-                    token_symbol: tokenSymbol,
+                    token_symbol: resolvedToken,
                     spender_address: spenderAddress,
                     allowance: allowance,
                     allowance_formatted: allowanceFormatted.toString(),

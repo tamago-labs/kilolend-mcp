@@ -22,18 +22,35 @@ export const RepayBorrowTool: McpTool = {
                 throw new Error('Transaction mode required. Configure private key in environment to enable transactions.');
             }
 
-            const tokenSymbol = input.token_symbol.toUpperCase();
+            const tokenSymbol = input.token_symbol.trim();
             const amount = input.amount;
             const checkBalance = input.check_balance !== false;
 
-            // Get current network info for context
-            const networkInfo = agent.currentNetworkInfo;
+            // Case-insensitive token resolution
+            let resolvedToken = tokenSymbol;
 
-            // Verify token is available on current network
+            // Get contract addresses and try case-insensitive matching
             const contracts = agent['getContractAddresses']();
-            const cTokenKey = `c${tokenSymbol}`;
-            const cTokenAddress = contracts[cTokenKey as keyof typeof contracts];
-            
+
+            // Try different cToken key variations
+            let cTokenAddress = null;
+            const variations = [
+                `c${resolvedToken}`,
+                `c${resolvedToken.toUpperCase()}`,
+                `c${resolvedToken.toLowerCase()}`,
+                `cStKAIA`, // Specific for StKAIA
+                `cstKAIA`,
+                `cSTKAIA`
+            ];
+
+            for (const variation of variations) {
+                if (contracts[variation as keyof typeof contracts]) {
+                    cTokenAddress = contracts[variation as keyof typeof contracts];
+                    resolvedToken = variation.substring(1);
+                    break;
+                }
+            }
+
             if (!cTokenAddress) {
                 const availableTokens = Object.keys(contracts)
                     .filter(k => k.startsWith('c'))
@@ -42,6 +59,9 @@ export const RepayBorrowTool: McpTool = {
                 
                 throw new Error(`Token ${tokenSymbol} not available on current network. Available tokens: ${availableTokens}`);
             }
+
+            // Get current network info for context
+            const networkInfo = agent.currentNetworkInfo;
 
             // Get user's current borrow position
             let borrowInfo = null;
@@ -55,7 +75,7 @@ export const RepayBorrowTool: McpTool = {
                     
                     // Find the specific token's borrow position
                     const borrowPosition = liquidityInfo.positions?.find((p: any) => 
-                        p.symbol === tokenSymbol && parseFloat(p.borrowBalance) > 0
+                        p.symbol === resolvedToken && parseFloat(p.borrowBalance) > 0
                     );
                     
                     if (!borrowPosition) {
@@ -65,18 +85,18 @@ export const RepayBorrowTool: McpTool = {
                     borrowInfo = {
                         current_borrow: borrowPosition.borrowBalance,
                         borrow_value_usd: borrowPosition.borrowValueUSD,
-                        symbol: tokenSymbol
+                        symbol: resolvedToken
                     };
 
                     // Check token balance if amount is specified
                     if (amount && checkBalance) {
                         const tokenAddresses = agent['getTokenAddresses']();
-                        const tokenAddress = tokenAddresses[tokenSymbol];
+                        const tokenAddress = tokenAddresses[resolvedToken];
                         
                         if (tokenAddress && tokenAddress !== '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE') {
                             // ERC20 token balance check
                             const tokenBalance = await agent['getTokenBalance'](tokenAddress as `0x${string}`, walletAddress as `0x${string}`);
-                            const tokenDecimals = agent['getTokenDecimals'](tokenSymbol);
+                            const tokenDecimals = agent['getTokenDecimals'](resolvedToken);
                             const balanceFormatted = Number(tokenBalance) / Math.pow(10, tokenDecimals);
                             const requestedAmount = Number(amount);
                             
@@ -117,14 +137,14 @@ export const RepayBorrowTool: McpTool = {
                 console.warn('Borrow/ balance check failed, proceeding with repayment:', errorMsg);
             }
             
-            const txHash = await agent.repayBorrow(tokenSymbol, amount);
+            const txHash = await agent.repayBorrow(resolvedToken, amount);
 
             return {
                 status: "success",
                 message: `✅ Successfully repaid ${amount || 'all'} ${tokenSymbol} tokens`,
                 transaction_hash: txHash,
                 details: {
-                    token_symbol: tokenSymbol,
+                    token_symbol: resolvedToken,
                     ctoken_address: cTokenAddress,
                     repayment_amount: amount || 'full amount',
                     network: {

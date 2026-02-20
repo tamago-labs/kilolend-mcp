@@ -21,24 +21,44 @@ export const BorrowFromMarketTool: McpTool = {
                 throw new Error('Transaction mode required. Configure private key in environment to enable transactions.');
             }
 
-            const tokenSymbol = input.token_symbol.toUpperCase();
-            const amount = input.amount;
-            const checkLiquidity = input.check_liquidity !== false;
-
             // Get current network info for context
             const networkInfo = agent.currentNetworkInfo;
+            const checkLiquidity = input.check_liquidity !== false;
 
-            // Verify token is available on current network
+            const tokenSymbol = input.token_symbol.trim();
+            const amount = input.amount;
+
+            // Case-insensitive token resolution
+            let resolvedToken = tokenSymbol;
+
+            // Get contract addresses and try case-insensitive matching
             const contracts = agent['getContractAddresses']();
-            const cTokenKey = `c${tokenSymbol}`;
-            const cTokenAddress = contracts[cTokenKey as keyof typeof contracts];
-            
+
+            // Try different cToken key variations
+            let cTokenAddress = null;
+            const variations = [
+                `c${resolvedToken}`,
+                `c${resolvedToken.toUpperCase()}`,
+                `c${resolvedToken.toLowerCase()}`,
+                `cStKAIA`, // Specific for StKAIA
+                `cstKAIA`,
+                `cSTKAIA`
+            ];
+
+            for (const variation of variations) {
+                if (contracts[variation as keyof typeof contracts]) {
+                    cTokenAddress = contracts[variation as keyof typeof contracts];
+                    resolvedToken = variation.substring(1);
+                    break;
+                }
+            }
+
             if (!cTokenAddress) {
                 const availableTokens = Object.keys(contracts)
                     .filter(k => k.startsWith('c'))
                     .map(k => k.substring(1))
                     .join(', ');
-                
+
                 throw new Error(`Token ${tokenSymbol} not available on current network. Available tokens: ${availableTokens}`);
             }
 
@@ -51,11 +71,11 @@ export const BorrowFromMarketTool: McpTool = {
                         liquidityInfo = await agent.getAccountLiquidity(walletAddress as any);
                         const liquidity = Number(liquidityInfo.liquidity);
                         const healthFactor = Number(liquidityInfo.healthFactor);
-                        
+
                         if (liquidity <= 0) {
                             throw new Error(`Insufficient liquidity to borrow. Current available liquidity: ${liquidity.toFixed(6)}`);
                         }
-                        
+
                         if (healthFactor < 1.5) {
                             throw new Error(`Health factor too low to borrow safely. Current health factor: ${healthFactor.toFixed(2)} (recommended: >1.5)`);
                         }
@@ -69,7 +89,7 @@ export const BorrowFromMarketTool: McpTool = {
                     console.warn('Liquidity check failed, proceeding with borrow:', errorMsg);
                 }
             }
-            
+
             const txHash = await agent.borrowFromMarket(tokenSymbol, amount);
 
             return {

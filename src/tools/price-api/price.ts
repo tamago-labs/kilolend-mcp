@@ -26,13 +26,13 @@ Object.entries(TOKEN_SYMBOL_MAP).forEach(([apiSymbol, standardSymbol]) => {
 // Get all available token symbols across all chains
 function getAllTokenSymbols(): string[] {
     const symbols = new Set<string>();
-    
+
     Object.values(TOKEN_CONFIGS).forEach(chainTokens => {
         chainTokens.forEach(token => {
             symbols.add(token.symbol);
         });
     });
-    
+
     return Array.from(symbols);
 }
 
@@ -50,7 +50,7 @@ function mapApiResponse(prices: any[]): any[] {
 
     // Find USDT price to create KUSDT entry
     const usdtPrice = mappedPrices.find(price => price.symbol === 'USDT');
-    
+
     if (usdtPrice) {
         // Add KUSDT entry using USDT price (for KUB chain)
         const kusdtEntry = {
@@ -58,7 +58,7 @@ function mapApiResponse(prices: any[]): any[] {
             symbol: 'KUSDT',
             name: 'KUB Tether USD'
         };
-        
+
         mappedPrices.push(kusdtEntry);
     }
 
@@ -109,8 +109,9 @@ export const getTokenPrices = async (symbols: string[]) => {
             return allPricesResult;
         }
 
+        const normalizedSymbols = symbols.map(s => s.toLowerCase());
         const filteredPrices = (allPricesResult.prices || []).filter((price: any) =>
-            symbols.includes(price.symbol)
+            normalizedSymbols.includes(price.symbol.toLowerCase())
         );
 
         return {
@@ -267,4 +268,4 @@ export const getNetworkPrices = async (network: NetworkType) => {
         };
     }
 };
- 
+

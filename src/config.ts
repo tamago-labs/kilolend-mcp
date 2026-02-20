@@ -214,15 +214,12 @@ export const TOKEN_CONFIGS = {
 
 
 export function getEnvironmentConfig(): KiloLendMCPEnvironment {
-    // Validate required environment variables
-    const required = ['RPC_URL', 'CHAIN_ID'];
-    const missing = required.filter(key => !process.env[key]);
-    
-    if (missing.length > 0) {
-        console.error(`❌ Missing required environment variables: ${missing.join(', ')}`);
+    // Validate required environment variables (only CHAIN_ID is required now)
+    if (!process.env.CHAIN_ID) {
+        console.error(`❌ Missing required environment variable: CHAIN_ID`);
         console.error(`💡 Please set the following in your .env file:`);
-        console.error(`   RPC_URL=your_rpc_url_here`);
         console.error(`   CHAIN_ID=8217 (or 42793 or 96)`);
+        console.error(`   RPC_URL=your_custom_rpc_url (optional, will use default if not provided)`);
         throw new Error('Missing required KiloLend MCP configuration');
     }
 
@@ -248,8 +245,11 @@ export function getEnvironmentConfig(): KiloLendMCPEnvironment {
             throw new Error(`Unsupported chain ID: ${chainId}`);
     }
 
+    // Use custom RPC URL if provided, otherwise use default from networkConfigs
+    const rpcUrl = process.env.RPC_URL || networkConfigs[network].rpcProviderUrl;
+
     const config: KiloLendMCPEnvironment = {
-        rpcUrl: process.env.RPC_URL!,
+        rpcUrl,
         chainId,
         agentMode: (process.env.AGENT_MODE as AgentMode) || 'readonly',
         network

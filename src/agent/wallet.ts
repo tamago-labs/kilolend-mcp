@@ -10,7 +10,6 @@ import {
     CTOKEN_ABI,
 } from '../contracts/ctoken';
 import { ERC20_ABI } from '../contracts/erc20';
-import { WKAIA_ADDRESS, WKAIA_ABI } from '../contracts/wkaia';
 import {
     TransactionError,
     InsufficientBalanceError,
@@ -94,7 +93,7 @@ export class WalletAgent {
     private getCTokenAddresses(): Record<string, Address> {
         const contracts = this.getContractAddresses();
         const cTokens: Record<string, Address> = {};
-        
+
         // Map cToken addresses from contracts
         Object.entries(contracts).forEach(([key, value]) => {
             if (key.startsWith('c')) {
@@ -102,7 +101,7 @@ export class WalletAgent {
                 cTokens[symbol] = value as Address;
             }
         });
-        
+
         return cTokens;
     }
 
@@ -111,6 +110,82 @@ export class WalletAgent {
         const tokens = this.getTokenConfigs();
         const token = tokens.find(t => t.symbol === symbol);
         return token?.decimals || 18;
+    }
+
+    // ===== TOKEN RESOLUTION METHODS =====
+
+    // Resolve token symbol to canonical format (case-insensitive)
+    private resolveTokenSymbol(inputSymbol: string): string {
+        const tokenConfigs = this.getTokenConfigs();
+        const normalizedInput = inputSymbol.toLowerCase().trim();
+
+        // First try exact match (case-insensitive)
+        let token = tokenConfigs.find(t => t.symbol.toLowerCase() === normalizedInput);
+        if (token) {
+            return token.symbol;
+        }
+
+        // Try special mappings for common variations
+        const specialMappings: Record<string, string> = {
+            'stkaia': 'stKAIA',  // stKAIA variations
+        };
+
+        if (specialMappings[normalizedInput]) {
+            // Check if the mapped symbol exists in token configs
+            const mappedToken = tokenConfigs.find(t => t.symbol === specialMappings[normalizedInput] || t.symbol === 'StKAIA');
+            if (mappedToken) {
+                return mappedToken.symbol;
+            }
+        }
+
+        // Try to find by checking cToken contracts
+        const contracts = this.getContractAddresses();
+        for (const [cTokenKey, _] of Object.entries(contracts)) {
+            if (cTokenKey.startsWith('c')) {
+                const symbol = cTokenKey.substring(1);
+                if (symbol.toLowerCase() === normalizedInput) {
+                    // Check if this symbol exists in token configs
+                    const token = tokenConfigs.find(t => t.symbol.toLowerCase() === symbol.toLowerCase());
+                    if (token) {
+                        return token.symbol;
+                    }
+                    // If not in token configs, return the symbol as is (might be the StKAIA case)
+                    return symbol;
+                }
+            }
+        }
+
+        // If nothing found, return the original input
+        return inputSymbol;
+    }
+
+    // Get canonical token symbol for cToken resolution
+    private getCanonicalSymbolForCToken(inputSymbol: string): string {
+        const contracts = this.getContractAddresses();
+        const resolvedSymbol = this.resolveTokenSymbol(inputSymbol);
+
+        // Check if cToken exists with resolved symbol
+        const cTokenKey = `c${resolvedSymbol}`;
+        if (contracts[cTokenKey as keyof typeof contracts]) {
+            return resolvedSymbol;
+        }
+
+        // Try with the original symbol
+        const originalCTokenKey = `c${inputSymbol}`;
+        if (contracts[originalCTokenKey as keyof typeof contracts]) {
+            return inputSymbol;
+        }
+
+        // Try variations for StKAIA specifically
+        const variations = ['StKAIA', 'stKAIA', 'STKAIA'];
+        for (const variation of variations) {
+            const testKey = `c${variation}`;
+            if (contracts[testKey as keyof typeof contracts]) {
+                return variation;
+            }
+        }
+
+        return resolvedSymbol;
     }
 
     // ===== WALLET INFO METHODS =====
@@ -418,13 +493,13 @@ export class WalletAgent {
             }
 
             const supplyBalance = (cTokenBalance * exchangeRateMantissa) / 10n ** 18n;
-            
+
             // Find the market symbol by looking through cToken addresses
             const cTokenAddresses = this.getCTokenAddresses();
-            const marketSymbol = Object.entries(cTokenAddresses).find(([_, address]) => 
+            const marketSymbol = Object.entries(cTokenAddresses).find(([_, address]) =>
                 address.toLowerCase() === cTokenAddress.toLowerCase()
             )?.[0] || 'UNKNOWN';
-            
+
             const price = await this.getTokenPrice(marketSymbol);
 
             // Get correct decimals for the token
@@ -487,15 +562,18 @@ export class WalletAgent {
     // ===== ALLOWANCE AND MARKET ENTRY METHODS =====
 
     async checkAllowance(tokenSymbol: string, spenderAddress: Address): Promise<string> {
+        // Resolve token symbol case-insensitively
+        const canonicalSymbol = this.resolveTokenSymbol(tokenSymbol);
+
         // Get token addresses for current network
         const tokenAddresses = this.getTokenAddresses();
+        const tokenAddress = tokenAddresses[canonicalSymbol];
 
-        const tokenAddress = tokenAddresses[tokenSymbol];
         if (!tokenAddress) {
             throw new ValidationError(`Token ${tokenSymbol} not supported`);
         }
 
-        if (tokenSymbol === this.currentNetworkInfo.nativeCurrency) {
+        if (canonicalSymbol === this.currentNetworkInfo.nativeCurrency) {
             return "115792089237316195423570985008687907853269984665640564039457584007913129639935"; // Max uint256 for native token
         }
 
@@ -516,18 +594,21 @@ export class WalletAgent {
     async approveToken(tokenSymbol: string, spenderAddress: Address, amount?: string): Promise<string> {
         this.requireTransactionMode();
 
+        // Resolve token symbol case-insensitively
+        const canonicalSymbol = this.resolveTokenSymbol(tokenSymbol);
         const tokenAddresses = this.getTokenAddresses();
-        const tokenAddress = tokenAddresses[tokenSymbol];
+        const tokenAddress = tokenAddresses[canonicalSymbol];
+
         if (!tokenAddress) {
             throw new ValidationError(`Token ${tokenSymbol} not supported`);
         }
 
-        if (tokenSymbol === this.currentNetworkInfo.nativeCurrency) {
+        if (canonicalSymbol === this.currentNetworkInfo.nativeCurrency) {
             throw new ValidationError(`${this.currentNetworkInfo.nativeCurrency} is native token and does not require approval`);
         }
 
         try {
-            const decimals = this.getTokenDecimals(tokenSymbol);
+            const decimals = this.getTokenDecimals(canonicalSymbol);
             const amountWei = amount ? parseUnits(amount, decimals) :
                 BigInt('115792089237316195423570985008687907853269984665640564039457584007913129639935'); // Max uint256
 
@@ -545,6 +626,7 @@ export class WalletAgent {
             throw handleContractError(error);
         }
     }
+
 
     async checkMarketMembership(cTokenAddress: Address): Promise<boolean> {
         const userAddress = this.getAddress();
@@ -629,14 +711,15 @@ export class WalletAgent {
             throw new ValidationError(validation.errors.join(', '));
         }
 
+        const canonicalSymbol = this.resolveTokenSymbol(tokenSymbol);
         const tokenAddresses = this.getTokenAddresses();
-        const tokenAddress = tokenAddresses[tokenSymbol];
+        const tokenAddress = tokenAddresses[canonicalSymbol];
         if (!tokenAddress) {
             throw new ValidationError(`Token ${tokenSymbol} not supported`);
         }
 
         try {
-            const decimals = this.getTokenDecimals(tokenSymbol);
+            const decimals = this.getTokenDecimals(canonicalSymbol);
 
             const txHash = await this.walletClient!.writeContract({
                 address: tokenAddress,
@@ -656,8 +739,10 @@ export class WalletAgent {
     async supplyToMarket(tokenSymbol: string, amount: string): Promise<string> {
         this.requireTransactionMode();
 
+        // Resolve token symbol case-insensitively for cToken lookup
+        const canonicalSymbol = this.getCanonicalSymbolForCToken(tokenSymbol);
         const cTokenAddresses = this.getCTokenAddresses();
-        const cTokenAddress = cTokenAddresses[tokenSymbol];
+        const cTokenAddress = cTokenAddresses[canonicalSymbol];
         if (!cTokenAddress) {
             throw new ValidationError(`Market ${tokenSymbol} not available`);
         }
@@ -669,20 +754,20 @@ export class WalletAgent {
                 await this.enterMarkets([cTokenAddress]);
             }
 
-            const decimals = this.getTokenDecimals(tokenSymbol);
+            const decimals = this.getTokenDecimals(canonicalSymbol);
             const amountWei = parseUnits(amount, decimals);
 
             // For ERC20 tokens, check and handle allowance
-            if (tokenSymbol !== this.currentNetworkInfo.nativeCurrency) {
-                const currentAllowance = await this.checkAllowance(tokenSymbol, cTokenAddress);
+            if (canonicalSymbol !== this.currentNetworkInfo.nativeCurrency) {
+                const currentAllowance = await this.checkAllowance(canonicalSymbol, cTokenAddress);
 
                 if (BigInt(currentAllowance) < amountWei) {
-                    await this.approveToken(tokenSymbol, cTokenAddress);
+                    await this.approveToken(canonicalSymbol, cTokenAddress);
                 }
             }
 
             // Handle native token differently - send value with transaction, no parameters
-            if (tokenSymbol === this.currentNetworkInfo.nativeCurrency) {
+            if (canonicalSymbol === this.currentNetworkInfo.nativeCurrency) {
                 const txHash = await this.walletClient!.writeContract({
                     address: cTokenAddress,
                     abi: [{
@@ -719,14 +804,17 @@ export class WalletAgent {
     async borrowFromMarket(tokenSymbol: string, amount: string): Promise<string> {
         this.requireTransactionMode();
 
+        // Resolve token symbol case-insensitively
+        const canonicalSymbol = this.getCanonicalSymbolForCToken(tokenSymbol);
         const cTokenAddresses = this.getCTokenAddresses();
-        const cTokenAddress = cTokenAddresses[tokenSymbol];
+        const cTokenAddress = cTokenAddresses[canonicalSymbol];
+
         if (!cTokenAddress) {
             throw new ValidationError(`Market ${tokenSymbol} not available`);
         }
 
         try {
-            const decimals = this.getTokenDecimals(tokenSymbol);
+            const decimals = this.getTokenDecimals(canonicalSymbol);
             const amountWei = parseUnits(amount, decimals);
 
             const txHash = await this.walletClient!.writeContract({
@@ -747,14 +835,17 @@ export class WalletAgent {
     async repayBorrow(tokenSymbol: string, amount?: string): Promise<string> {
         this.requireTransactionMode();
 
+        // Resolve token symbol case-insensitively
+        const canonicalSymbol = this.getCanonicalSymbolForCToken(tokenSymbol);
         const cTokenAddresses = this.getCTokenAddresses();
-        const cTokenAddress = cTokenAddresses[tokenSymbol];
+        const cTokenAddress = cTokenAddresses[canonicalSymbol];
+
         if (!cTokenAddress) {
             throw new ValidationError(`Market ${tokenSymbol} not available`);
         }
 
         try {
-            const decimals = this.getTokenDecimals(tokenSymbol);
+            const decimals = this.getTokenDecimals(canonicalSymbol);
             const amountWei = amount ? parseUnits(amount, decimals) :
                 BigInt('115792089237316195423570985008687907853269984665640564039457584007913129639935');
 
@@ -805,8 +896,11 @@ export class WalletAgent {
     async redeemTokens(tokenSymbol: string, cTokenAmount: string): Promise<string> {
         this.requireTransactionMode();
 
+        // Resolve token symbol case-insensitively
+        const canonicalSymbol = this.getCanonicalSymbolForCToken(tokenSymbol);
         const cTokenAddresses = this.getCTokenAddresses();
-        const cTokenAddress = cTokenAddresses[tokenSymbol];
+        const cTokenAddress = cTokenAddresses[canonicalSymbol];
+
         if (!cTokenAddress) {
             throw new ValidationError(`Market ${tokenSymbol} not available`);
         }
@@ -844,14 +938,17 @@ export class WalletAgent {
     async redeemUnderlying(tokenSymbol: string, underlyingAmount: string): Promise<string> {
         this.requireTransactionMode();
 
+        // Resolve token symbol case-insensitively
+        const canonicalSymbol = this.getCanonicalSymbolForCToken(tokenSymbol);
         const cTokenAddresses = this.getCTokenAddresses();
-        const cTokenAddress = cTokenAddresses[tokenSymbol];
+        const cTokenAddress = cTokenAddresses[canonicalSymbol];
+
         if (!cTokenAddress) {
             throw new ValidationError(`Market ${tokenSymbol} not available`);
         }
 
         try {
-            const decimals = this.getTokenDecimals(tokenSymbol);
+            const decimals = this.getTokenDecimals(canonicalSymbol); 
             const underlyingAmountWei = parseUnits(underlyingAmount, decimals);
 
             const txHash = await this.walletClient!.writeContract({
@@ -868,8 +965,8 @@ export class WalletAgent {
             throw handleContractError(error);
         }
     }
- 
- 
+
+
     // ===== HELPER METHODS =====
 
     private requireTransactionMode(): void {

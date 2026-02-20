@@ -25,50 +25,71 @@ export const SupplyToMarketTool: McpTool = {
                 throw new Error('Transaction mode required. Configure private key in environment to enable transactions.');
             }
 
-            const tokenSymbol = input.token_symbol.toUpperCase();
+            const tokenSymbol = input.token_symbol.trim();
             const amount = input.amount;
             const checkBalance = input.check_balance !== false;
             const autoApprove = input.auto_approve !== false;
 
+            // Case-insensitive token resolution
+            let resolvedToken = tokenSymbol;
+
             // Get current network info for context
             const networkInfo = agent.currentNetworkInfo;
 
-            // Verify token is available on current network
+            // Get contract addresses and try case-insensitive matching
             const contracts = agent['getContractAddresses']();
-            const cTokenKey = `c${tokenSymbol}`;
-            const cTokenAddress = contracts[cTokenKey as keyof typeof contracts];
-            
+
+            // Try different cToken key variations
+            let cTokenAddress = null;
+            const variations = [
+                `c${resolvedToken}`,
+                `c${resolvedToken.toUpperCase()}`,
+                `c${resolvedToken.toLowerCase()}`,
+                `cStKAIA`, // Specific for StKAIA
+                `cstKAIA`,
+                `cSTKAIA`
+            ];
+
+            for (const variation of variations) {
+                if (contracts[variation as keyof typeof contracts]) {
+                    cTokenAddress = contracts[variation as keyof typeof contracts];
+                    // Update resolvedToken to match the found variation (remove 'c' prefix)
+                    resolvedToken = variation.substring(1);
+                    break;
+                }
+            }
+
             if (!cTokenAddress) {
                 const availableTokens = Object.keys(contracts)
                     .filter(k => k.startsWith('c'))
                     .map(k => k.substring(1))
                     .join(', ');
-                
+
                 throw new Error(`Token ${tokenSymbol} not available on current network. Available tokens: ${availableTokens}`);
             }
 
             // Check token balance if requested
             let balanceInfo = null;
             let allowanceInfo = null;
-            
+
             if (checkBalance) {
                 try {
                     const walletAddress = agent.getAddress();
                     if (walletAddress) {
                         const tokenAddresses = agent['getTokenAddresses']();
                         const tokenAddress = tokenAddresses[tokenSymbol];
-                        
+
                         if (tokenAddress && tokenAddress !== '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE') {
                             // ERC20 token balance check
                             const tokenBalance = await agent['getTokenBalance'](tokenAddress as `0x${string}`, walletAddress as `0x${string}`);
                             const tokenDecimals = agent['getTokenDecimals'](tokenSymbol);
                             const balanceFormatted = Number(tokenBalance) / Math.pow(10, tokenDecimals);
                             const requestedAmount = Number(amount);
-                            
+
                             if (balanceFormatted < requestedAmount) {
                                 throw new Error(`Insufficient ${tokenSymbol} balance. Current balance: ${balanceFormatted.toFixed(6)} ${tokenSymbol}, requested: ${requestedAmount} ${tokenSymbol}`);
                             }
-                            
+
                             balanceInfo = {
                                 token_balance: tokenBalance.toString(),
                                 balance_formatted: balanceFormatted.toString(),
@@ -79,7 +100,7 @@ export const SupplyToMarketTool: McpTool = {
                             if (autoApprove) {
                                 const currentAllowance = await agent.checkAllowance(tokenSymbol, cTokenAddress as any);
                                 const amountWei = BigInt(requestedAmount * Math.pow(10, tokenDecimals));
-                                
+
                                 if (BigInt(currentAllowance) < amountWei) {
                                     allowanceInfo = {
                                         current_allowance: currentAllowance.toString(),
@@ -99,11 +120,11 @@ export const SupplyToMarketTool: McpTool = {
                             const nativeBalance = await publicClient.getBalance({ address: walletAddress });
                             const balanceFormatted = Number(nativeBalance) / Math.pow(10, 18);
                             const requestedAmount = Number(amount);
-                            
+
                             if (balanceFormatted < requestedAmount) {
                                 throw new Error(`Insufficient ${tokenSymbol} balance. Current balance: ${balanceFormatted.toFixed(6)} ${tokenSymbol}, requested: ${requestedAmount} ${tokenSymbol}`);
                             }
-                            
+
                             balanceInfo = {
                                 token_balance: nativeBalance.toString(),
                                 balance_formatted: balanceFormatted.toString(),
@@ -120,7 +141,7 @@ export const SupplyToMarketTool: McpTool = {
                     console.warn('Balance check failed, proceeding with supply:', errorMsg);
                 }
             }
-            
+
             // Check if user is in the market, if not, enter market
             let marketEntered = false;
             try {
@@ -135,7 +156,7 @@ export const SupplyToMarketTool: McpTool = {
             } catch (error) {
                 console.warn('Market entry check failed, proceeding with supply:', error);
             }
-            
+
             const txHash = await agent.supplyToMarket(tokenSymbol, amount);
 
             return {
