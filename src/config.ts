@@ -186,7 +186,7 @@ export const TOKEN_CONFIGS = {
     {
       name: 'KUB Tether USD',
       symbol: 'KUSDT',
-      decimals: 6,
+      decimals: 18,
       address: '0x2C03058C8AFC06713be23e58D2febC8337dbfE6A'
     },
     {
@@ -331,13 +331,55 @@ const getAccount = (): Account => {
     }
 }
 
-// Initialize client configuration
-export const network = getNetwork();
+// Initialize client configuration with error handling
+let network: NetworkType;
+let networkInfo: any;
+let account: Account;
+let agentMode: AgentMode;
+let publicClient: any;
+let walletClient: any;
 
-export const networkInfo = {
-    ...networkConfigs[network],
-    rpcProviderUrl: getEnvironmentConfig().rpcUrl,
-};
+try {
+    network = getNetwork();
+    networkInfo = {
+        ...networkConfigs[network],
+        rpcProviderUrl: getEnvironmentConfig().rpcUrl,
+    };
+    account = getAccount();
+    agentMode = getEnvironmentConfig().agentMode;
+
+    const baseConfig = {
+        chain: networkInfo.chain,
+        transport: http(networkInfo.rpcProviderUrl),
+    } as const;
+
+    publicClient = createPublicClient(baseConfig);
+    walletClient = createWalletClient({
+        ...baseConfig,
+        account,
+    }) as WalletClient;
+} catch (error) {
+    // Default fallback values for development/testing
+    console.warn('Warning: Failed to initialize network configuration. Using fallback values.');
+    network = 'kaia';
+    networkInfo = networkConfigs.kaia;
+    account = privateKeyToAccount(generatePrivateKey());
+    agentMode = 'readonly';
+    
+    const baseConfig = {
+        chain: networkInfo.chain,
+        transport: http(networkInfo.rpcProviderUrl),
+    } as const;
+    
+    publicClient = createPublicClient(baseConfig);
+    walletClient = createWalletClient({
+        ...baseConfig,
+        account,
+    }) as WalletClient;
+}
+
+// Export initialized values
+export { network, networkInfo, account, agentMode, publicClient, walletClient };
 
 // API Configuration
 export const apiConfig = {
@@ -345,27 +387,6 @@ export const apiConfig = {
     priceUrl: process.env.PRICE_URL || 'https://kvxdikvk5b.execute-api.ap-southeast-1.amazonaws.com/prod/prices',
     timeout: 10000
 };
-
-export const account: Account = getAccount()
-
-const getMode = (): AgentMode => {
-    const config = getEnvironmentConfig();
-    return config.agentMode;
-}
-
-export const agentMode: AgentMode = getMode()
-
-const baseConfig = {
-    chain: networkInfo.chain,
-    transport: http(networkInfo.rpcProviderUrl),
-} as const;
-
-export const publicClient = createPublicClient(baseConfig);
-
-export const walletClient = createWalletClient({
-    ...baseConfig,
-    account,
-}) as WalletClient;
 
 // Multi-chain client factory
 export function createClientForNetwork(networkType: NetworkType) {
