@@ -132,7 +132,7 @@ export class WalletAgent {
 
         if (specialMappings[normalizedInput]) {
             // Check if the mapped symbol exists in token configs
-            const mappedToken = tokenConfigs.find(t => t.symbol === specialMappings[normalizedInput] || t.symbol === 'StKAIA');
+            const mappedToken = tokenConfigs.find(t => t.symbol === specialMappings[normalizedInput]);
             if (mappedToken) {
                 return mappedToken.symbol;
             }

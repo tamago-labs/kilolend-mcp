@@ -19,6 +19,21 @@ import {
     GetNetworkPricesTool,
     GetAllPricesTool
 } from "./price";
+import { wrapTools } from "./wrap";
+import { dexTools } from "./dex";
+import { universalTools } from "./universal";
+
+// Import individual wrap tools
+const WrapNativeTokenTool = wrapTools[0];
+const UnwrapNativeTokenTool = wrapTools[1];
+
+// Import individual DEX tools
+const GetSwapQuoteTool = dexTools[0];
+const ExecuteSwapTool = dexTools[1];
+
+// Import individual universal tools
+const UniversalContractReadTool = universalTools[0];
+const UniversalContractWriteTool = universalTools[1];
 
 export const KiloLendWalletTools = {
     // Basic wallet information and account management (read-only)
@@ -37,6 +52,18 @@ export const KiloLendWalletTools = {
     "RepayBorrowTool": RepayBorrowTool,                        // Repay borrowed tokens
     "RedeemUnderlyingTool": RedeemUnderlyingTool,              // Redeem underlying tokens (withdraw by underlying amount)
 
+    // Wrap/Unwrap operations
+    "WrapNativeTokenTool": WrapNativeTokenTool,                // Wrap native tokens (KAIA→WKAIA, KUB→KKUB, XTZ→WXTZ)
+    "UnwrapNativeTokenTool": UnwrapNativeTokenTool,            // Unwrap tokens back to native (WKAIA→KAIA, KKUB→KUB, WXTZ→XTZ)
+
+    // DEX operations (KAIA & KUB only)
+    "GetSwapQuoteTool": GetSwapQuoteTool,                      // Get swap quotes for token exchanges
+    "ExecuteSwapTool": ExecuteSwapTool,                        // Execute token swaps on DEX
+
+    // Universal contract operations
+    "UniversalContractReadTool": UniversalContractReadTool,      // Execute read-only calls on any contract
+    "UniversalContractWriteTool": UniversalContractWriteTool,    // Execute write calls on any contract
+
     // Price API operations
     "GetNetworkPricesTool": GetNetworkPricesTool,              // Get prices for specific network
     "GetAllPricesTool": GetAllPricesTool,                       // Get all available token prices
@@ -48,6 +75,12 @@ export const KiloLendReadOnlyTools = {
     "GetWalletInfoTool": GetWalletInfoTool,
     "GetAccountLiquidityTool": GetAccountLiquidityTool,
     "GetMarketsTool": GetMarketsTool,
+
+    // Read-only DEX operations
+    "GetSwapQuoteTool": GetSwapQuoteTool,                      // Get swap quotes (read-only)
+
+    // Read-only universal operations
+    "UniversalContractReadTool": UniversalContractReadTool,      // Execute read-only calls on any contract
 
     // Price API operations (read-only)
     "GetNetworkPricesTool": GetNetworkPricesTool,              // Get prices for specific network

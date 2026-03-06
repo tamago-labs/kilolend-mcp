@@ -104,7 +104,7 @@ export const CHAIN_CONFIGS = {
   }
 } as const;
 
-// Smart Contract Addresses for each chain (System contracts and cTokens only)
+// Smart Contract Addresses for each chain (System contracts, cTokens, wrapped tokens, and DEX)
 export const CHAIN_CONTRACTS = {
   kaia: {
     // System contracts
@@ -118,7 +118,16 @@ export const CHAIN_CONTRACTS = {
     cBORA: '0xA7247a6f5EaC85354642e0E90B515E2dC027d5F4',
     cMBX: '0xa024B1DE3a6022FB552C2ED9a8050926Fb22d7b6',
     cKAIA: '0x2029f3E3C667EBd68b1D29dbd61dc383BdbB56e5',
-    cStKAIA: '0x8A424cCf2D2B7D85F1DFb756307411D2BBc73e07'
+    cStKAIA: '0x8A424cCf2D2B7D85F1DFb756307411D2BBc73e07',
+    // Wrapped tokens
+    WKAIA: '0x19aac5f612f524b754ca7e7c41cbfa2e981a4432',
+    // DEX contracts
+    Router: '0x2C7C28D7C138d630fBD9F6Ed7504C2DB14D437cC',
+    Factory: '0x86312E4e86f8424E8AFEe8aAFE9c1A33a6381f85',
+    QuoterV2: '0x5Fdbe804f53aE11862381373fB4E0cC6e9400879',
+    PoolOracle: '0x7d16bc59F533b090A3a13B8Ad25c6a041B23BbEF',
+    // KLAW Token
+    KLAW: '0xd145A1F18c5EDc9CeE0994e6a8e2eB9Dd0A40Cb6'
   },
   kub: {
     // System contracts
@@ -128,7 +137,16 @@ export const CHAIN_CONTRACTS = {
     VolatileRateModel: '0x790057160a6B183C80C0514f644eA6BCE9EDa0D4',
     // cToken contracts
     cKUSDT: '0x5E9aF11F9a09174B87550B4Bfb4EdE65De933085',
-    cKUB: '0x0cA8DaD1e517a9BB760Ba0C27051C4C3A036eA75'
+    cKUB: '0x0cA8DaD1e517a9BB760Ba0C27051C4C3A036eA75',
+    // Wrapped tokens
+    KKUB: '0x67eBD850304c70d983B2d1b93ea79c7CD6c3F6b5',
+    // DEX contracts
+    Router: '0x5570c281c8F51905Edb78AC65E11b3c236F68F7b',
+    Factory: '0x4443d912199047c5450c9847a96180AE3204949F',
+    QuoterV2: '0xc2E717DaB7DCaCcf1A463BB6ba66903BC41a7E1e',
+    PoolOracle: '0x9C8fAA8367D4e669Ee19fb3BCc95EFf374912a6f',
+    // KLAW Token
+    KLAW: '0xa83a9e9B63D48551F56179a92A2Ccf7984B167ff'
   },
   etherlink: {
     // System contracts
@@ -138,7 +156,10 @@ export const CHAIN_CONTRACTS = {
     VolatileRateModel: '0x790057160a6B183C80C0514f644eA6BCE9EDa0D4',
     // cToken contracts
     cUSDT: '0x5E9aF11F9a09174B87550B4Bfb4EdE65De933085',
-    cXTZ: '0x0cA8DaD1e517a9BB760Ba0C27051C4C3A036eA75'
+    cXTZ: '0x0cA8DaD1e517a9BB760Ba0C27051C4C3A036eA75',
+    // Wrapped tokens
+    WXTZ: '0xc9B53AB2679f573e480d01e0f49e2B5CFB7a3EAb'
+    // No DEX contracts for Etherlink
   }
 } as const;
 
@@ -180,6 +201,18 @@ export const TOKEN_CONFIGS = {
       symbol: 'stKAIA',
       decimals: 18,
       address: '0x42952b873ed6f7f0a7e4992e2a9818e3a9001995'
+    },
+    {
+      name: 'Wrapped KAIA',
+      symbol: 'WKAIA',
+      decimals: 18,
+      address: '0x19aac5f612f524b754ca7e7c41cbfa2e981a4432'
+    },
+    {
+      name: 'KLAW Token',
+      symbol: 'KLAW',
+      decimals: 18,
+      address: '0xd145A1F18c5EDc9CeE0994e6a8e2eB9Dd0A40Cb6'
     }
   ],
   kub: [
@@ -194,6 +227,18 @@ export const TOKEN_CONFIGS = {
       symbol: 'KUB',
       decimals: 18,
       address: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE'
+    },
+    {
+      name: 'Wrapped KUB',
+      symbol: 'KKUB',
+      decimals: 18,
+      address: '0x67eBD850304c70d983B2d1b93ea79c7CD6c3F6b5'
+    },
+    {
+      name: 'KLAW Token',
+      symbol: 'KLAW',
+      decimals: 18,
+      address: '0xa83a9e9B63D48551F56179a92A2Ccf7984B167ff'
     }
   ],
   etherlink: [
@@ -208,6 +253,12 @@ export const TOKEN_CONFIGS = {
       symbol: 'XTZ',
       decimals: 18,
       address: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE'
+    },
+    {
+      name: 'Wrapped XTZ',
+      symbol: 'WXTZ',
+      decimals: 18,
+      address: '0xc9B53AB2679f573e480d01e0f49e2B5CFB7a3EAb'
     }
   ]
 } as const;
