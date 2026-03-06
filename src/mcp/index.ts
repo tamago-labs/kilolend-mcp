@@ -22,6 +22,7 @@ import {
 import { wrapTools } from "./wrap";
 import { dexTools } from "./dex";
 import { universalTools } from "./universal";
+import { aiagentTools } from "./aiagent";
 
 // Import individual wrap tools
 const WrapNativeTokenTool = wrapTools[0];
@@ -34,6 +35,9 @@ const ExecuteSwapTool = dexTools[1];
 // Import individual universal tools
 const UniversalContractReadTool = universalTools[0];
 const UniversalContractWriteTool = universalTools[1];
+
+// Import individual AI Agent tools
+const BurnTokensTool = aiagentTools[0].tool;
 
 export const KiloLendWalletTools = {
     // Basic wallet information and account management (read-only)
@@ -63,6 +67,9 @@ export const KiloLendWalletTools = {
     // Universal contract operations
     "UniversalContractReadTool": UniversalContractReadTool,      // Execute read-only calls on any contract
     "UniversalContractWriteTool": UniversalContractWriteTool,    // Execute write calls on any contract
+
+    // AI Agent Token operations
+    "BurnTokensTool": BurnTokensTool,                          // Burn AI Agent tokens (requires AI Agent or Creator role)
 
     // Price API operations
     "GetNetworkPricesTool": GetNetworkPricesTool,              // Get prices for specific network
